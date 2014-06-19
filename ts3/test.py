@@ -19,7 +19,7 @@ class TS3ProtoTest(unittest.TestCase):
     def testControlEscaping(self):
 
         teststr = b"\n\r\t"
-        expected = str.encode(r'\n\r\t')
+        expected = b'\n\r\t'
 
         self.assertEqual(self.ts3._escape_str(teststr), expected)
 
@@ -43,13 +43,19 @@ class TS3ProtoTest(unittest.TestCase):
         self.assertEqual(self.ts3.construct_command('testcommand', opts=['test1', 'test2', 'test3']), 'testcommand -test1 -test2 -test3')
         self.assertEqual(self.ts3.construct_command('testcommand', keys={'key1': b'test'}), "testcommand key1=b'test'")
 
-        self.assertEqual(self.ts3.construct_command('testcommand', keys={'key1': b'test', 'key2': 'test'}), "testcommand key1=b'test' key2=b'test'")
+        res = self.ts3.construct_command('testcommand', keys={'key1': b'test', 'key2': 'test'})
 
+        if res != "testcommand key1=b'test' key2=b'test'" and res != "testcommand key2=b'test' key1=b'test'":
+            self.assertEqual(res, "testcommand key1=b'test' key2=b'test'")
 
-        self.assertEqual(self.ts3.construct_command('testcommand', keys={'key1': b'test', 'key2': [1, 2, 3]}), "testcommand key1=b'test' key2=1|key2=2|key2=3")
+        res = self.ts3.construct_command('testcommand', keys={'key1': b'test', 'key2': [1, 2, 3]})
+        if res != "testcommand key1=b'test' key2=1|key2=2|key2=3" and res != "testcommand key2=1|key2=2|key2=3 key1=b'test'":
+            self.assertEqual(res, "testcommand key1=b'test' key2=1|key2=2|key2=3")
 
+        res = self.ts3.construct_command('testcommand', keys={'key1': b'test', 'key2': 'test'}, opts=['test'])
+        if res != "testcommand key2=b'test' key1=b'test' -test" and res != "testcommand key1=b'test' key2=b'test' -test":
+            self.assertEqual(res, "testcommand key2=b'test' key1=b'test' -test")
 
-        self.assertEqual(self.ts3.construct_command('testcommand', keys={'key1': b'test', 'key2': 'test'}, opts=['test']), "testcommand key2=b'test' key1=b'test' -test")
     
     def testParseData(self):
         # some response examples taken from http://media.teamspeak.com/ts3_literature/TeamSpeak%203%20Server%20Query%20Manual.pdf
