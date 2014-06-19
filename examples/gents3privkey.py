@@ -58,13 +58,14 @@ def main():
 
     args = vars(parser.parse_args())
 
-    if 'channelgroup' in args and 'servergroup' in args:
+    if args['channelgroup'] is not None and args['servergroup'] is not None:
         sys.exit("You can't specify a channel and server group")
-    if 'channelgroup' in args and not 'channel' in args:
+    if args['channelgroup'] is not None and args['channel'] is None:
         sys.exit("You need to specify a channel to create a channelgroup key")
 
     ts3 = TS3Server(args['server'], args['port'], args['vhost'])
-    ts3.login(args['login'], args['password'])
+    assert ts3.login(args['login'], args['password']), "Login failed."
+
 
 
     if 'servergroup' in args:

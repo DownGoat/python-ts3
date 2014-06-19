@@ -55,6 +55,20 @@ class InvalidArguments(ValueError):
     """
 
 ts3_escape = [
+     (chr(92), '\\'),  # \
+     (chr(47), "\/"),  # /
+     (chr(32), '\s'),  # Space
+     (chr(124), '\p'), # |
+     (chr(7), '\a'),   # Bell
+     (chr(8), '\b'),   # Backspace
+     (chr(12), '\f'),  # Formfeed
+     (chr(10), '\n'),  # Newline
+     (chr(13), '\r'),  # Carrage Return
+     (chr(9), '\t'),   # Horizontal Tab
+     (chr(11), '\v'),  # Vertical tab
+]
+
+ts3_escape_byte = [
      (str.encode(chr(92)), b'\\'),  # \
      (str.encode(chr(47)), b"\/"),  # /
      (str.encode(chr(32)), b'\s'),  # Space
@@ -82,7 +96,7 @@ class TS3Response():
     
     @property
     def is_successful(self):
-        return self.response[b'msg'] == b'ok'
+        return self.response['msg'] == 'ok'
 
 class TS3Proto():
 
@@ -139,9 +153,9 @@ class TS3Proto():
             response = self._telnet.read_until(b"\n\r", self._timeout)
 
         if isinstance(data, bytes):
-            return TS3Response(response, data)
+            return TS3Response(response, data.decode("utf-8"))
                 
-        return TS3Response(response, str.encode(data))
+        return TS3Response(response, data)
     
     def check_connection(self):
         if not self.is_connected:
@@ -205,12 +219,11 @@ class TS3Proto():
         @type data: string
         """
 
+        if isinstance(data, bytes):
+            data = data.decode("utf-8")
         data = data.strip()
 
-        if isinstance(data, str):
-            data = str.encode(data)
-
-        multipart = data.split(b'|')
+        multipart = data.split('|')
 
         if len(multipart) > 1:
             values = []
@@ -219,16 +232,16 @@ class TS3Proto():
                 values.append(TS3Proto.parse_data(part))
             return values
 
-        chunks = data.split(b' ')
+        chunks = data.split(' ')
         parsed_data = {}
 
         for chunk in chunks:
-            chunk = chunk.strip().split(b'=')
+            chunk = chunk.strip().split('=')
 
             if len(chunk) > 1:
                 if len(chunk) > 2:
                     # value can contain '=' which may confuse our parser
-                    chunk = [chunk[0], b'='.join(chunk[1:])]
+                    chunk = [chunk[0], '='.join(chunk[1:])]
                 
                 key, value = chunk
                 parsed_data[key] = TS3Proto._unescape_str(value)
@@ -251,9 +264,6 @@ class TS3Proto():
         if isinstance(value, int):
             return str(value)
 
-        if isinstance(value, str):
-            value = str.encode(value)
-
         for i, j in ts3_escape:
             value = value.replace(i, j)
         
@@ -272,9 +282,6 @@ class TS3Proto():
         if isinstance(value, int):
             return str(value)
 
-        if isinstance(value, str):
-            value = str.encode(value)
-        
         for i, j in ts3_escape:
             value = value.replace(j, i)
         
