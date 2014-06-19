@@ -30,7 +30,7 @@ import telnetlib
 import logging
 from threading import Lock
 
-from defines import *
+from .defines import *
 
 __version__ = "0.1"
 __license__ = "BSD 3-Clause"
@@ -45,7 +45,7 @@ class ConnectionError(Exception):
     def __str__():
         return 'Error connecting to host %s port %s.' % (self.ip, self.port,)
 
-class NoConnection(Exception):
+class NoConnectionError(Exception):
     def __str__():
         return 'No connection established.' % (self.ip, self.port,)
 
@@ -55,17 +55,17 @@ class InvalidArguments(ValueError):
     """
 
 ts3_escape = [
-     (chr(92), r'\\'),  # \
-     (chr(47), r"\/"),  # /
-     (chr(32), r'\s'),  # Space
-     (chr(124), r'\p'), # |
-     (chr(7), r'\a'),   # Bell
-     (chr(8), r'\b'),   # Backspace
-     (chr(12), r'\f'),  # Formfeed
-     (chr(10), r'\n'),  # Newline
-     (chr(13), r'\r'),  # Carrage Return
-     (chr(9), r'\t'),   # Horizontal Tab
-     (chr(11), r'\v'),  # Vertical tab
+     (str.encode(chr(92)), b'\\'),  # \
+     (str.encode(chr(47)), b"\/"),  # /
+     (str.encode(chr(32)), b'\s'),  # Space
+     (str.encode(chr(124)), b'\p'), # |
+     (str.encode(chr(7)), b'\a'),   # Bell
+     (str.encode(chr(8)), b'\b'),   # Backspace
+     (str.encode(chr(12)), b'\f'),  # Formfeed
+     (str.encode(chr(10)), b'\n'),  # Newline
+     (str.encode(chr(13)), b'\r'),  # Carrage Return
+     (str.encode(chr(9)), b'\t'),   # Horizontal Tab
+     (str.encode(chr(11)), b'\v'),  # Vertical tab
 ]
 
 
@@ -82,7 +82,7 @@ class TS3Response():
     
     @property
     def is_successful(self):
-        return self.response['msg'] == 'ok'
+        return self.response[b'msg'] == b'ok'
 
 class TS3Proto():
 
@@ -104,10 +104,10 @@ class TS3Proto():
         self._timeout = timeout
         self._connected = False
 
-        data = self._telnet.read_until("\n\r", self._timeout)
+        data = self._telnet.read_until(b"\n\r", self._timeout)
         self.io_lock.release()
 
-        if data.endswith("TS3\n\r"):
+        if data.endswith(b"TS3\n\r"):
             self._connected = True
 
         return self._connected
@@ -127,18 +127,21 @@ class TS3Proto():
         self.logger.debug("send_command - %s" % commandstr)
 
         self.io_lock.acquire()
-        self._telnet.write("%s\n\r" % commandstr)
+        self._telnet.write(str.encode("%s\n\r" % commandstr))
 
         data = ""
-        response = self._telnet.read_until("\n\r", self._timeout)
+        response = self._telnet.read_until(b"\n\r", self._timeout)
         self.io_lock.release()
 
-        if not response.startswith("error"):
+        if not response.startswith(b"error"):
             # what we just got was extra data
             data = response
-            response = self._telnet.read_until("\n\r", self._timeout)
+            response = self._telnet.read_until(b"\n\r", self._timeout)
+
+        if isinstance(data, bytes):
+            return TS3Response(response, data)
                 
-        return TS3Response(response, data)
+        return TS3Response(response, str.encode(data))
     
     def check_connection(self):
         if not self.is_connected:
@@ -204,7 +207,10 @@ class TS3Proto():
 
         data = data.strip()
 
-        multipart = data.split('|')
+        if isinstance(data, str):
+            data = str.encode(data)
+
+        multipart = data.split(b'|')
 
         if len(multipart) > 1:
             values = []
@@ -213,16 +219,16 @@ class TS3Proto():
                 values.append(TS3Proto.parse_data(part))
             return values
 
-        chunks = data.split(' ')
+        chunks = data.split(b' ')
         parsed_data = {}
 
         for chunk in chunks:
-            chunk = chunk.strip().split('=')
+            chunk = chunk.strip().split(b'=')
 
             if len(chunk) > 1:
                 if len(chunk) > 2:
                     # value can contain '=' which may confuse our parser
-                    chunk = [chunk[0], '='.join(chunk[1:])]
+                    chunk = [chunk[0], b'='.join(chunk[1:])]
                 
                 key, value = chunk
                 parsed_data[key] = TS3Proto._unescape_str(value)
@@ -242,10 +248,12 @@ class TS3Proto():
         @type value: string/int
 
         """
-
         if isinstance(value, int):
             return str(value)
-        
+
+        if isinstance(value, str):
+            value = str.encode(value)
+
         for i, j in ts3_escape:
             value = value.replace(i, j)
         
@@ -263,6 +271,9 @@ class TS3Proto():
 
         if isinstance(value, int):
             return str(value)
+
+        if isinstance(value, str):
+            value = str.encode(value)
         
         for i, j in ts3_escape:
             value = value.replace(j, i)
@@ -355,7 +366,7 @@ class TS3Server(TS3Proto):
         client = None
         if cldbid:
             clientlist = self.send_command('clientlist')
-            for cl in clientlist.values():
+            for cl in list(clientlist.values()):
                 if int(cl['client_database_id']) == cldbid:
                     client = cl['clid']
                     self.logger.debug("clientkick - identified user from clid (%s = %s)" % (cldbid, client))
